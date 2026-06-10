@@ -1,0 +1,2 @@
+# 3Dconnexion SpacePilot Pro LCD: allow non-root access to the USB device
+SUBSYSTEM=="usb", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c629", MODE="0664", GROUP="plugdev"

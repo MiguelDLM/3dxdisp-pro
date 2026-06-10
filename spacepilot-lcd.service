@@ -1,0 +1,20 @@
+# systemd user unit for the SpacePilot Pro LCD status daemon.
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp spacepilot-lcd.service ~/.config/systemd/user/
+#   # Edit WorkingDirectory/ExecStart below to match where you cloned the repo
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now spacepilot-lcd
+[Unit]
+Description=3Dconnexion SpacePilot Pro LCD status daemon
+
+[Service]
+Type=simple
+WorkingDirectory=%h/3Dconnexoion-Spacemous-Linux
+ExecStart=%h/3Dconnexoion-Spacemous-Linux/venv/bin/python spnav_lcd_daemon.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

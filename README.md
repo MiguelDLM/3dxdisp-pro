@@ -1,0 +1,136 @@
+# 3Dconnexion SpacePilot Pro LCD on Linux
+
+Bring the LCD screen of the **3Dconnexion SpacePilot Pro** back to life on Linux.
+
+The open-source [spacenavd](https://github.com/FreeSpacenav/spacenavd) driver handles
+the 6DOF axes and buttons perfectly, but it does not support the LCD, which stays
+frozen on the boot logo. This project documents the (previously undocumented for this
+device) USB protocol and provides:
+
+- **`spplcd.py`** — library + CLI to push images, text, or a test pattern to the LCD
+- **`spnav_lcd_daemon.py`** — a small daemon that shows your spacenavd button
+  assignments and a clock on the screen, similar to what 3DxWare does on Windows
+- **`99-spacepilot-pro-lcd.rules`** — udev rule for non-root access
+- **`spacepilot-lcd.service`** — systemd user unit for the daemon
+
+![device](https://img.shields.io/badge/device-046d%3Ac629-blue)
+![license](https://img.shields.io/badge/license-GPL--3.0-green)
+
+## How it works (the interesting part)
+
+The SpacePilot Pro was built while 3Dconnexion was a Logitech subsidiary, and its
+screen is **the same 320×240 color LCD module used by the Logitech G19 keyboard**,
+speaking the same protocol that was reverse-engineered years ago in
+[libg19](https://github.com/jgeboski/libg19).
+
+The device (USB `046d:c629`) exposes two interfaces:
+
+| Interface | Class | Purpose |
+|---|---|---|
+| 0 | Vendor-specific (0xFF) | **The LCD.** Bulk OUT endpoint `0x02` (512-byte packets). No kernel driver binds to it. |
+| 1 | HID | The 6DOF sensor and buttons (what spacenavd uses, via `/dev/input`). |
+
+Because the LCD has its own interface, it can be claimed with libusb/pyusb **without
+touching spacenavd or motion input at all**.
+
+### Frame format
+
+A full screen update is **one bulk transfer of 154,112 bytes** to endpoint `0x02`:
+
+```
+512-byte header  +  320*240*2 bytes of RGB565 little-endian pixels
+```
+
+The header (taken from libg19) is 15 magic bytes followed by incrementing filler:
+
+```
+10 0F 00 58 02 00 00 00 00 00 00 3F 01 EF 00 | 0F 10 11 12 ... FF 00 01 ...
+```
+
+### Panel orientation (determined empirically on real hardware)
+
+The physical panel is a **240×320 portrait module mounted sideways, with a mirrored
+horizontal scan**. A landscape 320×240 image must be transformed with
+`FLIP_LEFT_RIGHT` then `ROTATE_90` (PIL transposes) before being written row-major
+into the framebuffer. Colors are plain RGB565 little-endian, no byte swap.
+
+If you skip this you get diagonal color stripes and mirrored text — that is how the
+orientation was discovered.
+
+### Extras
+
+- Brightness should be controllable with a USB control transfer
+  (`bmRequestType=0x41, bRequest=0x0A`, value 0–100, per libg19) — **untested**.
+- Note for SpacePilot *original* (`046d:c625`) owners: that model has a different
+  monochrome 240×64 screen driven by HID feature reports; use
+  [jtsiomb/3dxdisp](https://github.com/jtsiomb/3dxdisp) instead. This project is
+  specifically for the **Pro**.
+
+## Installation
+
+```bash
+git clone https://github.com/MiguelDLM/3Dconnexoion-Spacemous-Linux.git
+cd 3Dconnexoion-Spacemous-Linux
+
+# Dependencies (in a venv, or use your distro's python3-usb / python3-pil)
+python3 -m venv venv
+venv/bin/pip install -r requirements.txt
+
+# Non-root USB access (make sure your user is in the 'plugdev' group)
+sudo cp 99-spacepilot-pro-lcd.rules /etc/udev/rules.d/
+sudo udevadm control --reload
+sudo udevadm trigger --action=change --attr-match=idVendor=046d --attr-match=idProduct=c629
+# (or simply unplug and replug the device)
+```
+
+## Usage
+
+```bash
+venv/bin/python spplcd.py                   # color bars test pattern
+venv/bin/python spplcd.py picture.png       # any image, rescaled to 320x240
+venv/bin/python spplcd.py --text "hello"    # centered text
+```
+
+### Button-mapping daemon
+
+`spnav_lcd_daemon.py` reads your spacenavd configuration (`~/.spnavrc` or
+`/etc/spnavrc`), and renders the `bnactN` / `kbmapN` / `bnmapN` button assignments
+plus a clock. It refreshes once a minute and whenever the config file changes, and
+survives device unplug/replug.
+
+```bash
+venv/bin/python spnav_lcd_daemon.py         # run in foreground to try it
+```
+
+To run it permanently, install the systemd user unit (edit the paths inside first):
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp spacepilot-lcd.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now spacepilot-lcd
+```
+
+## Compatibility notes
+
+- Tested on Linux with spacenavd 1.3.1 running — the daemon and spacenavd coexist
+  with no interference, since they use different USB interfaces.
+- Other G19-protocol devices are *not* auto-detected (the VID/PID is fixed to the
+  SpacePilot Pro); adapting it to the actual G19 only requires changing the IDs.
+- The SpaceMouse Enterprise LCD uses a different mechanism — see
+  [spacenavd PR #134](https://github.com/FreeSpacenav/spacenavd/pull/134).
+
+## Credits
+
+- [libg19](https://github.com/jgeboski/libg19) by James Geboski — the G19 protocol
+  (header constant and transfer format) this project builds on.
+- [spacenavd / FreeSpacenav](https://github.com/FreeSpacenav/spacenavd) by John
+  Tsiombikas — the driver that makes these devices usable on Linux in the first place.
+- Forum archaeology: the hint that the SpacePilot Pro screen is a Logitech GamePanel
+  module comes from old 3Dconnexion forum threads and
+  [Jeremy Paquette's blog](https://jeremypaquette.com/blog/?post=4).
+
+## License
+
+GPL-3.0 — see [LICENSE](LICENSE). The protocol header data originates from libg19
+(GPL-3.0).
