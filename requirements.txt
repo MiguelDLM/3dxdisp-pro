@@ -1,2 +1,4 @@
 pyusb>=1.2
 pillow>=9.0
+# Only needed for the settings application (lcd_settings.py):
+PySide6

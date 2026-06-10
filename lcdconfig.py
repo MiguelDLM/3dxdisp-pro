@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+# This file is part of spacepilot-pro-lcd. License: GPL-3.0 (see LICENSE).
+"""Configuration for the SpacePilot Pro LCD daemon and settings app.
+
+The config lives in ~/.config/spacepilot-lcd/config.json. The daemon watches
+the file's mtime and hot-reloads it, so the settings app only needs to write
+the file — no daemon restart required.
+"""
+
+import copy
+import glob
+import json
+import os
+
+CONFIG_DIR = os.path.join(
+    os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
+    "spacepilot-lcd")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+# Per-applet option defaults. The settings app builds its forms from these,
+# so adding a key here makes it configurable everywhere.
+APPLET_DEFAULTS = {
+    "mappings": {
+        "title": "Button mappings",
+    },
+    "clock": {
+        "title": "Clock",
+        "style": "digital",          # digital | analog
+        "use_24h": True,
+        "show_seconds": False,
+        "show_date": True,
+        "font": "DejaVuSans-Bold",
+        "size": 72,
+        "color": "#00ffff",
+        "background": "#0a0a1e",
+        "timezone": "",              # empty = local time
+        "label": "",
+        "second_timezone": "",       # non-empty = dual clock
+        "second_label": "",
+    },
+    "calendar": {
+        "title": "Calendar",
+        "week_starts_monday": True,
+        "color": "#ffffff",
+        "highlight": "#00a0ff",
+    },
+    "system": {
+        "title": "System monitor",
+        "show_cpu": True,
+        "show_ram": True,
+        "show_gpu": True,
+        "show_vram": True,
+        "show_net": False,
+        "refresh_seconds": 2,
+    },
+    "input": {
+        "title": "6DOF input test",
+        "axis_range": 350,
+    },
+}
+
+DEFAULT_CONFIG = {
+    "brightness": 90,
+    "osd_seconds": 1.8,
+    "notifications": {"enabled": True, "seconds": 6},
+    "pages": [
+        {"type": "mappings"},
+        {"type": "clock"},
+        {"type": "system"},
+    ],
+}
+
+
+def applet_with_defaults(page):
+    """Return a page dict with every option filled in from the defaults."""
+    merged = copy.deepcopy(APPLET_DEFAULTS.get(page.get("type"), {}))
+    merged.update(page)
+    return merged
+
+
+def load():
+    try:
+        with open(CONFIG_FILE) as fp:
+            cfg = json.load(fp)
+    except (OSError, ValueError):
+        return copy.deepcopy(DEFAULT_CONFIG)
+    merged = copy.deepcopy(DEFAULT_CONFIG)
+    merged.update(cfg)
+    merged["pages"] = [applet_with_defaults(p) for p in merged.get("pages", [])
+                       if p.get("type") in APPLET_DEFAULTS]
+    return merged
+
+
+def save(cfg):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    tmp = CONFIG_FILE + ".tmp"
+    with open(tmp, "w") as fp:
+        json.dump(cfg, fp, indent=2)
+    os.replace(tmp, CONFIG_FILE)
+
+
+def mtime():
+    try:
+        return os.path.getmtime(CONFIG_FILE)
+    except OSError:
+        return None
+
+
+def available_fonts():
+    """Map of font name -> .ttf path for the fonts we can rely on."""
+    fonts = {}
+    for pattern in ("/usr/share/fonts/truetype/dejavu/*.ttf",
+                    "/usr/share/fonts/TTF/DejaVu*.ttf",
+                    "/usr/share/fonts/truetype/liberation/*.ttf",
+                    "/usr/share/fonts/liberation/*.ttf"):
+        for path in glob.glob(pattern):
+            name = os.path.splitext(os.path.basename(path))[0]
+            if "Oblique" in name or "Italic" in name or "Math" in name:
+                continue
+            fonts[name] = path
+    return dict(sorted(fonts.items()))
+
+
+def font_path(name):
+    return available_fonts().get(name) or available_fonts().get(
+        "DejaVuSans-Bold")

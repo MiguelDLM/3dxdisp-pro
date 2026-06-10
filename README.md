@@ -112,14 +112,41 @@ venv/bin/python spplcd.py --brightness 60   # backlight brightness, 0-100
 
 ### Button-mapping daemon
 
-`spnav_lcd_daemon.py` turns the screen into a small applet panel in the spirit of
-3DxWare's LCD applets on Windows, and revives the bezel keys around it:
+`spnav_lcd_daemon.py` turns the screen into a configurable applet panel in the
+spirit of 3DxWare's LCD applets on Windows. Available applets:
 
 - **Button mappings**: the `bnactN` / `kbmapN` / `bnmapN` assignments from your
   spacenavd config (`~/.spnavrc` or `/etc/spnavrc`), with physical key names.
-- **Clock**: big clock with date.
-- **System monitor**: live CPU / RAM / GPU / VRAM usage bars with temperatures,
-  refreshed every 2 seconds (AMD GPUs via amdgpu sysfs, NVIDIA via `nvidia-smi`).
+- **Clock**: digital or **analog** (hands), 12/24h, seconds, date, custom font,
+  colors and size, any time zone, and **dual clock** (two time zones at once).
+- **Calendar**: month view with today highlighted.
+- **System monitor**: live CPU / RAM / GPU / VRAM / network usage bars with
+  temperatures (AMD GPUs via amdgpu sysfs, NVIDIA via `nvidia-smi`).
+- **6DOF input test**: live translation/rotation axis bars and a 31-button grid
+  that lights up as you press — verify the device works at a glance (reads
+  spacenavd's socket directly, alongside your other apps).
+- **Desktop notifications**: the same notifications GNOME/KDE show can be
+  mirrored on the LCD as overlay popups (via `dbus-monitor`, optional).
+
+### Settings application
+
+`lcd_settings.py` is a native Qt window (PySide6) to configure everything: which
+pages to show and their order (add/remove/reorder), every applet option (fonts,
+colors with a color picker, time zones, clock styles...), brightness, OSD and
+notifications — with a **pixel-exact live preview** rendered by the daemon's own
+applet code. Saving applies instantly: the daemon hot-reloads
+`~/.config/spacepilot-lcd/config.json` without restarting.
+
+```bash
+venv/bin/pip install PySide6        # only needed for the settings app
+venv/bin/python lcd_settings.py
+```
+
+A desktop launcher template is included (`spacepilot-lcd-settings.desktop`): edit
+the path inside and copy it to `~/.local/share/applications/`. To ship the app as
+a single binary, PyInstaller works: `pyinstaller --onefile lcd_settings.py`.
+
+### Bezel keys
 
 Every bezel key press gives on-screen feedback (OSD):
 
@@ -134,6 +161,12 @@ Every bezel key press gives on-screen feedback (OSD):
 | Settings | help overlay with this key reference |
 
 The daemon survives device unplug/replug.
+
+### Applet ideas (contributions welcome)
+
+Media now-playing (MPRIS), weather, pomodoro timer, per-core CPU, disk usage,
+photo slideshow, e-mail/RSS counters... the applet API is a single pure function
+returning a 320×240 PIL image (see `applets.py`).
 
 > While the daemon runs it holds the LCD USB interface claimed — stop it
 > (`systemctl --user stop spacepilot-lcd`) before using `spplcd.py` manually.

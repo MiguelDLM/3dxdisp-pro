@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SpacePilot LCD Settings
+Comment=Configure the 3Dconnexion SpacePilot Pro LCD pages and applets
+# Adjust the path to where you cloned the repository:
+Exec=sh -c "$HOME/3Dconnexoion-Spacemous-Linux/venv/bin/python $HOME/3Dconnexoion-Spacemous-Linux/lcd_settings.py"
+Icon=preferences-desktop-display
+Terminal=false
+Categories=Settings;HardwareSettings;
