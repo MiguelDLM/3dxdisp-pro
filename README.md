@@ -59,8 +59,14 @@ orientation was discovered.
 
 ### Extras
 
-- Brightness should be controllable with a USB control transfer
-  (`bmRequestType=0x41, bRequest=0x0A`, value 0–100, per libg19) — **untested**.
+- **Brightness** is controlled with a vendor control transfer
+  (`bmRequestType=0x41, bRequest=0x0A, wValue=0-100`, per libg19) — exposed as
+  `spplcd.py --brightness N`.
+- **The keys around the screen** (menu/navigation, G19 heritage) do *not* go
+  through the HID interface, so spacenavd never sees them. They report on the
+  LCD interface via interrupt endpoint `0x81` (2-byte packets). Use
+  `bezel_keys.py` to capture their codes (stop the daemon first, since both
+  claim interface 0).
 - Note for SpacePilot *original* (`046d:c625`) owners: that model has a different
   monochrome 240×64 screen driven by HID feature reports; use
   [jtsiomb/3dxdisp](https://github.com/jtsiomb/3dxdisp) instead. This project is
@@ -89,6 +95,7 @@ sudo udevadm trigger --action=change --attr-match=idVendor=046d --attr-match=idP
 venv/bin/python spplcd.py                   # color bars test pattern
 venv/bin/python spplcd.py picture.png       # any image, rescaled to 320x240
 venv/bin/python spplcd.py --text "hello"    # centered text
+venv/bin/python spplcd.py --brightness 60   # backlight brightness, 0-100
 ```
 
 ### Button-mapping daemon
@@ -110,6 +117,33 @@ cp spacepilot-lcd.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now spacepilot-lcd
 ```
+
+## Using it with Blender
+
+Blender maps all 31 SpacePilot Pro buttons **natively** through its GHOST NDOF
+layer (same numbering as spacenavd): Menu opens the NDOF popup, Fit frames the
+selection, Top/Front/Right switch views, Esc/Alt/Shift/Ctrl act as those keys,
+and so on. Customize them in *Preferences > Keymap* (search for "NDOF").
+
+What Blender does *not* handle is daemon-side motion tuning. The example config
+[`examples/spnavrc-blender`](examples/spnavrc-blender) binds the keys whose
+physical labels match spacenavd's built-in actions — works on Wayland too:
+
+| Key | Action |
+|---|---|
+| `+` / `-` | global sensitivity up / down |
+| `Dominant` | restrict motion to the strongest axis |
+| `Rotation` | rotation-only mode |
+| `Pan Zoom` | pan/zoom-only mode |
+
+```bash
+sudo cp examples/spnavrc-blender /etc/spnavrc   # spacenavd is a system service
+sudo systemctl restart spacenavd
+```
+
+The LCD daemon picks the file up automatically and shows the bindings on the
+screen. The commented `kbmap` examples in the same file inject keyboard keys,
+but only on X11 sessions — they do nothing on Wayland.
 
 ## Compatibility notes
 

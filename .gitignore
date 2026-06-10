@@ -1,3 +1,16 @@
+# Python
 __pycache__/
 *.pyc
 venv/
+.venv/
+
+# Editors / IDE
+.vscode/
+.idea/
+*.swp
+
+# Local-only files: machine-specific configs, captures, secrets
+*.local
+*.log
+.env
+local/

@@ -47,10 +47,20 @@ ACTION_LABELS = {
     "sensitivity-up": "Sensitivity +",
     "sensitivity-down": "Sensitivity -",
     "sensitivity-reset": "Sensitivity reset",
-    "disable-rotation": "Toggle rotation",
-    "disable-translation": "Toggle translation",
+    "disable-rotation": "Pan/zoom only",
+    "disable-translation": "Rotation only",
     "dominant-axis": "Dominant axis",
     "none": "(none)",
+}
+
+# Physical key names of the SpacePilot Pro, by spacenavd button number.
+# Source: Blender's GHOST NDOF map for device 046d:c629 (31 buttons).
+BUTTON_NAMES = {
+    0: "Menu", 1: "Fit", 2: "Top", 3: "Left", 4: "Right", 5: "Front",
+    6: "Bottom", 7: "Back", 8: "RollCW", 9: "RollCC", 10: "ISO1", 11: "ISO2",
+    **{12 + n: str(n + 1) for n in range(10)},
+    22: "Esc", 23: "Alt", 24: "Shift", 25: "Ctrl", 26: "Rot", 27: "Pan",
+    28: "Dom", 29: "+", 30: "-",
 }
 
 
@@ -102,8 +112,9 @@ def render(config_path, mappings):
         for n, (button, label) in enumerate(mappings[:per_col * 2]):
             col, row = divmod(n, per_col)
             x, y = 8 + col * (WIDTH // 2), top + row * line_h
-            d.text((x, y), f"B{button:02d}", fill=(0, 255, 0), font=entry_font)
-            d.text((x + 38, y), label[:18], fill=(255, 255, 255), font=entry_font)
+            name = BUTTON_NAMES.get(button, f"B{button}")
+            d.text((x, y), f"[{name}]", fill=(0, 255, 0), font=entry_font)
+            d.text((x + 56, y), label[:15], fill=(255, 255, 255), font=entry_font)
         if len(mappings) > per_col * 2:
             d.text((WIDTH - 8, HEIGHT - 14), f"+{len(mappings) - per_col * 2} more",
                    fill=(160, 160, 160), anchor="rm", font=small_font)

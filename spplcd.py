@@ -34,6 +34,7 @@ CLI usage:
     spplcd.py                   -> test pattern
     spplcd.py image.png         -> display an image (rescaled to 320x240)
     spplcd.py --text "hello"    -> display centered text
+    spplcd.py --brightness 80   -> set backlight brightness (0-100)
 """
 
 import sys
@@ -103,6 +104,11 @@ class SpacePilotLCD:
         payload = HEADER + bytes(image_to_framebuffer(img))
         return self.dev.write(LCD_ENDPOINT, payload, timeout=5000)
 
+    def set_brightness(self, level):
+        """Set backlight brightness, 0-100 (vendor control transfer, per libg19)."""
+        level = max(0, min(100, int(level)))
+        self.dev.ctrl_transfer(0x41, 0x0A, level, 0, None, timeout=1000)
+
     def close(self):
         try:
             usb.util.release_interface(self.dev, LCD_INTERFACE)
@@ -143,6 +149,11 @@ def test_image():
 
 
 def main(argv):
+    if len(argv) >= 3 and argv[1] == "--brightness":
+        with SpacePilotLCD() as lcd:
+            lcd.set_brightness(argv[2])
+        print(f"Brightness set to {argv[2]}")
+        return
     if len(argv) >= 3 and argv[1] == "--text":
         img = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 40))
         d = ImageDraw.Draw(img)

@@ -1,0 +1,47 @@
+# spacenavd configuration tuned for Blender with a 3Dconnexion SpacePilot Pro
+#
+# Install (spacenavd runs as a system service, so the config must be global):
+#   sudo cp examples/spnavrc-blender /etc/spnavrc
+#   sudo systemctl restart spacenavd
+#
+# Button numbering for the SpacePilot Pro (046d:c629), as seen by spacenavd
+# and by Blender's GHOST NDOF map:
+#
+#    0 Menu    1 Fit     2 Top     3 Left    4 Right   5 Front
+#    6 Bottom  7 Back    8 RollCW  9 RollCCW 10 ISO1  11 ISO2
+#   12-21 function keys "1".."10"
+#   22 Esc   23 Alt   24 Shift  25 Ctrl
+#   26 Rotation  27 Pan/Zoom  28 Dominant  29 Plus  30 Minus
+#
+# IMPORTANT for Blender users: Blender maps all 31 buttons NATIVELY through
+# its own NDOF keymap (Menu = NDOF popup, Fit = frame selected, Top/Front/
+# Right = views, Esc/Alt/Shift/Ctrl act as those modifier keys, ISO1 = iso
+# view...). You normally do NOT need kbmap for Blender: customize the
+# "NDOF Button" entries in Preferences > Keymap instead.
+#
+# What IS useful daemon-side: bind the keys whose labels match spacenavd's
+# built-in motion actions. These work in every application, Wayland included.
+
+# [+] / [-] keys: global sensitivity
+bnact29 = sensitivity-up
+bnact30 = sensitivity-down
+
+# [Dominant] key: restrict motion to the strongest axis
+bnact28 = dominant-axis
+
+# [Rotation] key: rotation-only (disables translation)
+bnact26 = disable-translation
+
+# [Pan Zoom] key: pan/zoom-only (disables rotation)
+bnact27 = disable-rotation
+
+# --- Keyboard emulation (kbmap) ---------------------------------------------
+# kbmap injects X11 key events. It is experimental and ONLY works on X11
+# sessions (it does nothing on Wayland). Keysym names: /usr/include/X11/
+# keysymdef.h without the XK_ prefix. Examples for Blender on X11:
+#
+#kbmap12 = Tab          # function key "1" -> toggle Edit Mode
+#kbmap13 = z            # function key "2" -> shading pie menu
+#kbmap14 = slash        # function key "3" -> local view
+#kbmap15 = period       # function key "4" -> frame selected (alt. to Fit)
+#kbmap16 = F12          # function key "5" -> render
