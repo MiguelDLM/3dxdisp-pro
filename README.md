@@ -64,9 +64,21 @@ orientation was discovered.
   `spplcd.py --brightness N`.
 - **The keys around the screen** (menu/navigation, G19 heritage) do *not* go
   through the HID interface, so spacenavd never sees them. They report on the
-  LCD interface via interrupt endpoint `0x81` (2-byte packets). Use
-  `bezel_keys.py` to capture their codes (stop the daemon first, since both
-  claim interface 0).
+  LCD interface via interrupt endpoint `0x81` as a 2-byte little-endian bitmask
+  (press sets the bit, release sends `0x0000`) — captured on real hardware and
+  matching the Logitech G19 display-key codes exactly:
+
+  | Key | Bit | Key | Bit |
+  |---|---|---|---|
+  | Settings | `0x0001` | Right | `0x0010` |
+  | Back | `0x0002` | Left | `0x0020` |
+  | Menu | `0x0004` | Down | `0x0040` |
+  | OK | `0x0008` | Up | `0x0080` |
+  | Light | `0x0200` | | |
+
+  The daemon gives them functions (see below); `bezel_keys.py` is the raw
+  capture tool used to discover them (stop the daemon first, both claim
+  interface 0).
 - Note for SpacePilot *original* (`046d:c625`) owners: that model has a different
   monochrome 240×64 screen driven by HID feature reports; use
   [jtsiomb/3dxdisp](https://github.com/jtsiomb/3dxdisp) instead. This project is
@@ -100,10 +112,19 @@ venv/bin/python spplcd.py --brightness 60   # backlight brightness, 0-100
 
 ### Button-mapping daemon
 
-`spnav_lcd_daemon.py` reads your spacenavd configuration (`~/.spnavrc` or
-`/etc/spnavrc`), and renders the `bnactN` / `kbmapN` / `bnmapN` button assignments
-plus a clock. It refreshes once a minute and whenever the config file changes, and
-survives device unplug/replug.
+`spnav_lcd_daemon.py` turns the screen into a small status panel with three pages,
+and revives the bezel keys around it:
+
+- **Page 1 — button mappings**: the `bnactN` / `kbmapN` / `bnmapN` assignments from
+  your spacenavd config (`~/.spnavrc` or `/etc/spnavrc`), with physical key names.
+- **Page 2 — clock**, **Page 3 — system status** (load, memory, uptime).
+
+Bezel key controls: **Left/Right** switch page, **Up/Down** adjust backlight
+brightness, **Light** toggles the backlight, **Menu** returns to the mappings page,
+**OK** forces a refresh. The daemon survives device unplug/replug.
+
+> While the daemon runs it holds the LCD USB interface claimed — stop it
+> (`systemctl --user stop spacepilot-lcd`) before using `spplcd.py` manually.
 
 ```bash
 venv/bin/python spnav_lcd_daemon.py         # run in foreground to try it

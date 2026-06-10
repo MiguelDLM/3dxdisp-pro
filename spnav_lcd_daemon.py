@@ -15,21 +15,27 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Status daemon for the SpacePilot Pro LCD.
 
-Replicates the most useful part of what 3DxWare shows on Windows: the current
-button assignments, read from the spacenavd configuration (~/.spnavrc or
-/etc/spnavrc), plus a clock. The screen refreshes once a minute and whenever
-the configuration file changes.
+Replicates the useful part of what 3DxWare shows on Windows:
 
-Recognized spnavrc keys (see spacenavd's example-spnavrc):
-    bnactN = <built-in action>   e.g. bnact16 = sensitivity-up
-    kbmapN = <X11 keysym>        e.g. kbmap0  = Escape
-    bnmapN = M                   button remapping (shown as-is)
+- Page 1: spacenavd button assignments, read from ~/.spnavrc or /etc/spnavrc
+  (keys bnactN / kbmapN / bnmapN), refreshed when the file changes.
+- Page 2: a big clock.
+- Page 3: system status (load, memory, uptime).
 
-Run it in the foreground (it is a simple loop); use the provided systemd user
-unit to keep it running in the background.
+It also brings the bezel keys around the screen back to life. Those keys
+never reach spacenavd (they report on the LCD USB interface, interrupt
+endpoint 0x81, as a 2-byte bitmask — same as the Logitech G19 menu pad):
+
+    Left/Right  switch page          Up/Down  backlight brightness
+    Light       toggle backlight     Menu     back to mappings page
+    OK          force refresh
+
+Note: while the daemon runs it holds the LCD interface claimed; stop it
+(systemctl --user stop spacepilot-lcd) before using spplcd.py manually.
 """
 
 import os
+import platform
 import signal
 import sys
 import time
@@ -41,7 +47,14 @@ from PIL import Image, ImageDraw
 from spplcd import WIDTH, HEIGHT, SpacePilotLCD, load_font
 
 CONFIG_PATHS = [os.path.expanduser("~/.spnavrc"), "/etc/spnavrc"]
-REFRESH_SECONDS = 60
+KEY_ENDPOINT = 0x81
+
+# Bezel key bitmask (same codes as the Logitech G19 display keys).
+KEY_SETTINGS, KEY_BACK, KEY_MENU, KEY_OK = 0x01, 0x02, 0x04, 0x08
+KEY_RIGHT, KEY_LEFT, KEY_DOWN, KEY_UP = 0x10, 0x20, 0x40, 0x80
+KEY_LIGHT = 0x200
+
+PAGES = ["mappings", "clock", "system"]
 
 ACTION_LABELS = {
     "sensitivity-up": "Sensitivity +",
@@ -88,26 +101,25 @@ def parse_mappings(path):
     return sorted(mappings.items())
 
 
-def render(config_path, mappings):
+def page_base(title):
     img = Image.new("RGB", (WIDTH, HEIGHT), (10, 10, 30))
     d = ImageDraw.Draw(img)
-    title_font, entry_font, small_font = load_font(20), load_font(15), load_font(12)
-
     d.rectangle([0, 0, WIDTH - 1, 30], fill=(30, 30, 70))
-    d.text((8, 15), "SpacePilot Pro", fill=(255, 255, 255),
-           anchor="lm", font=title_font)
+    d.text((8, 15), title, fill=(255, 255, 255), anchor="lm", font=load_font(20))
     d.text((WIDTH - 8, 15), datetime.now().strftime("%H:%M"),
-           fill=(0, 255, 255), anchor="rm", font=title_font)
+           fill=(0, 255, 255), anchor="rm", font=load_font(20))
+    return img, d
 
+
+def render_mappings(config_path, mappings):
+    img, d = page_base("SpacePilot Pro")
+    entry_font, small_font = load_font(15), load_font(12)
     if not mappings:
-        d.text((WIDTH // 2, HEIGHT // 2),
-               "No button mappings in spnavrc", fill=(255, 255, 0),
-               anchor="mm", font=entry_font)
-        d.text((WIDTH // 2, HEIGHT // 2 + 24),
-               "(spacenavd defaults active)", fill=(160, 160, 160),
-               anchor="mm", font=small_font)
+        d.text((WIDTH // 2, HEIGHT // 2), "No button mappings in spnavrc",
+               fill=(255, 255, 0), anchor="mm", font=entry_font)
+        d.text((WIDTH // 2, HEIGHT // 2 + 24), "(spacenavd defaults active)",
+               fill=(160, 160, 160), anchor="mm", font=small_font)
     else:
-        # Two columns of up to 9 entries each; anything beyond is summarized.
         per_col, top, line_h = 9, 40, 21
         for n, (button, label) in enumerate(mappings[:per_col * 2]):
             col, row = divmod(n, per_col)
@@ -118,10 +130,46 @@ def render(config_path, mappings):
         if len(mappings) > per_col * 2:
             d.text((WIDTH - 8, HEIGHT - 14), f"+{len(mappings) - per_col * 2} more",
                    fill=(160, 160, 160), anchor="rm", font=small_font)
-
     source = os.path.basename(config_path) if config_path else "no spnavrc found"
     d.text((8, HEIGHT - 14), source, fill=(100, 100, 140),
            anchor="lm", font=small_font)
+    return img
+
+
+def render_clock():
+    img, d = page_base("Clock")
+    now = datetime.now()
+    d.text((WIDTH // 2, 110), now.strftime("%H:%M"), fill=(0, 255, 255),
+           anchor="mm", font=load_font(72))
+    d.text((WIDTH // 2, 180), now.strftime("%A %d %B %Y"),
+           fill=(255, 255, 255), anchor="mm", font=load_font(17))
+    return img
+
+
+def render_system():
+    img, d = page_base(platform.node() or "System")
+    font = load_font(16)
+    load1, load5, load15 = os.getloadavg()
+    mem_total = mem_avail = 0
+    with open("/proc/meminfo") as fp:
+        for line in fp:
+            if line.startswith("MemTotal:"):
+                mem_total = int(line.split()[1])
+            elif line.startswith("MemAvailable:"):
+                mem_avail = int(line.split()[1])
+    with open("/proc/uptime") as fp:
+        up = float(fp.read().split()[0])
+    rows = [
+        ("Load", f"{load1:.2f}  {load5:.2f}  {load15:.2f}"),
+        ("Memory", f"{(mem_total - mem_avail) / 1048576:.1f} / "
+                   f"{mem_total / 1048576:.1f} GiB"),
+        ("Uptime", f"{int(up // 86400)}d {int(up % 86400 // 3600)}h "
+                   f"{int(up % 3600 // 60)}m"),
+    ]
+    for n, (key, value) in enumerate(rows):
+        y = 60 + n * 34
+        d.text((12, y), key, fill=(0, 255, 0), font=font)
+        d.text((110, y), value, fill=(255, 255, 255), font=font)
     return img
 
 
@@ -135,25 +183,79 @@ def main():
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
 
-    last_mtime = None
-    last_minute = None
-    while running:
-        config_path = find_config()
-        mtime = os.path.getmtime(config_path) if config_path else None
-        minute = datetime.now().strftime("%H:%M")
+    lcd = None
+    page = 0
+    brightness = 90
+    light_on = True
+    pressed_mask = 0
+    last_state = None  # (page, minute, config mtime)
 
-        if mtime != last_mtime or minute != last_minute:
-            mappings = parse_mappings(config_path) if config_path else []
+    def render():
+        if PAGES[page] == "clock":
+            return render_clock()
+        if PAGES[page] == "system":
+            return render_system()
+        config_path = find_config()
+        mappings = parse_mappings(config_path) if config_path else []
+        return render_mappings(config_path, mappings)
+
+    while running:
+        if lcd is None:
             try:
-                with SpacePilotLCD() as lcd:
-                    lcd.send_image(render(config_path, mappings))
-                last_mtime, last_minute = mtime, minute
+                lcd = SpacePilotLCD()
+                lcd.set_brightness(brightness if light_on else 0)
+                last_state = None
             except (IOError, usb.core.USBError) as err:
-                # Device unplugged or busy: keep retrying quietly.
                 print(f"LCD unavailable, retrying: {err}", file=sys.stderr)
                 time.sleep(10)
                 continue
-        time.sleep(2)
+        try:
+            config_path = find_config()
+            state = (page, datetime.now().strftime("%H:%M"),
+                     os.path.getmtime(config_path) if config_path else None)
+            if state != last_state:
+                lcd.send_image(render())
+                last_state = state
+
+            # Poll the bezel keys; this also paces the loop (~0.5s).
+            try:
+                data = lcd.dev.read(KEY_ENDPOINT, 8, timeout=500)
+            except usb.core.USBTimeoutError:
+                continue
+            for i in range(0, len(data) - 1, 2):
+                mask = data[i] | (data[i + 1] << 8)
+                new = mask & ~pressed_mask
+                pressed_mask = mask
+                if new & KEY_LEFT:
+                    page = (page - 1) % len(PAGES)
+                if new & KEY_RIGHT:
+                    page = (page + 1) % len(PAGES)
+                if new & KEY_MENU:
+                    page = 0
+                if new & KEY_OK:
+                    last_state = None
+                if new & KEY_UP:
+                    brightness = min(100, brightness + 15)
+                    light_on = True
+                    lcd.set_brightness(brightness)
+                if new & KEY_DOWN:
+                    brightness = max(5, brightness - 15)
+                    light_on = True
+                    lcd.set_brightness(brightness)
+                if new & KEY_LIGHT:
+                    light_on = not light_on
+                    lcd.set_brightness(brightness if light_on else 0)
+        except usb.core.USBError as err:
+            print(f"USB error, reconnecting: {err}", file=sys.stderr)
+            try:
+                lcd.close()
+            except Exception:
+                pass
+            lcd = None
+            time.sleep(5)
+
+    if lcd is not None:
+        lcd.close()
 
 
 if __name__ == "__main__":
