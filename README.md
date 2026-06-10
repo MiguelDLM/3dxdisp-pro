@@ -112,16 +112,28 @@ venv/bin/python spplcd.py --brightness 60   # backlight brightness, 0-100
 
 ### Button-mapping daemon
 
-`spnav_lcd_daemon.py` turns the screen into a small status panel with three pages,
-and revives the bezel keys around it:
+`spnav_lcd_daemon.py` turns the screen into a small applet panel in the spirit of
+3DxWare's LCD applets on Windows, and revives the bezel keys around it:
 
-- **Page 1 — button mappings**: the `bnactN` / `kbmapN` / `bnmapN` assignments from
-  your spacenavd config (`~/.spnavrc` or `/etc/spnavrc`), with physical key names.
-- **Page 2 — clock**, **Page 3 — system status** (load, memory, uptime).
+- **Button mappings**: the `bnactN` / `kbmapN` / `bnmapN` assignments from your
+  spacenavd config (`~/.spnavrc` or `/etc/spnavrc`), with physical key names.
+- **Clock**: big clock with date.
+- **System monitor**: live CPU / RAM / GPU / VRAM usage bars with temperatures,
+  refreshed every 2 seconds (AMD GPUs via amdgpu sysfs, NVIDIA via `nvidia-smi`).
 
-Bezel key controls: **Left/Right** switch page, **Up/Down** adjust backlight
-brightness, **Light** toggles the backlight, **Menu** returns to the mappings page,
-**OK** forces a refresh. The daemon survives device unplug/replug.
+Every bezel key press gives on-screen feedback (OSD):
+
+| Key | Function |
+|---|---|
+| Left / Right | previous / next page |
+| Up / Down | backlight brightness (on-screen bar) |
+| Light | backlight on / off |
+| Menu | page menu — Up/Down to select, OK to confirm, Back to cancel |
+| OK | confirm in menu; refresh page otherwise |
+| Back | close menu/help; otherwise jump to first page |
+| Settings | help overlay with this key reference |
+
+The daemon survives device unplug/replug.
 
 > While the daemon runs it holds the LCD USB interface claimed — stop it
 > (`systemctl --user stop spacepilot-lcd`) before using `spplcd.py` manually.
