@@ -30,8 +30,8 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QColorDialog, QComboBox, QDoubleSpinBox,
-    QFormLayout, QGroupBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
-    QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox,
+    QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QInputDialog, QLabel,
+    QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMenu, QMessageBox,
     QPushButton, QScrollArea, QSlider, QSpinBox, QTableWidget,
     QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
@@ -56,6 +56,7 @@ APPLET_LABELS = {
     "system": "System monitor",
     "input": "6DOF input test",
     "profiles": "Profiles (selector)",
+    "active_profile": "Active profile (pad view)",
 }
 
 FIELD_LABELS = {
@@ -181,6 +182,46 @@ class SettingsWindow(QMainWindow):
         gform.addRow("Notification time (s)", self.notif_secs)
         left.addWidget(glob)
 
+        # screen saver
+        saver = QGroupBox("Screen saver")
+        sform = QFormLayout(saver)
+        sv = self.cfg["screensaver"]
+        sv_enable = QCheckBox("Enable after idle time")
+        sv_enable.setChecked(bool(sv["enabled"]))
+        sv_enable.toggled.connect(lambda v: sv.__setitem__("enabled", v))
+        sform.addRow(sv_enable)
+        sv_min = QSpinBox()
+        sv_min.setRange(1, 120)
+        sv_min.setValue(int(sv["minutes"]))
+        sv_min.valueChanged.connect(lambda v: sv.__setitem__("minutes", v))
+        sform.addRow("Idle minutes", sv_min)
+        self.sv_behavior = QComboBox()
+        self.sv_behavior.addItem("Keep current page", "keep")
+        self.sv_behavior.addItem("Switch to a page", "page")
+        self.sv_behavior.addItem("Show an image", "image")
+        self.sv_behavior.setCurrentIndex(
+            {"keep": 0, "page": 1, "image": 2}.get(sv["behavior"], 1))
+        self.sv_behavior.currentIndexChanged.connect(
+            lambda i: sv.__setitem__("behavior",
+                                     self.sv_behavior.itemData(i)))
+        sform.addRow("Behavior", self.sv_behavior)
+        self.sv_page = QComboBox()
+        self._reload_saver_pages()
+        self.sv_page.currentIndexChanged.connect(
+            lambda i: sv.__setitem__("page_index", max(0, i)))
+        sform.addRow("Saver page", self.sv_page)
+        img_row = QHBoxLayout()
+        self.sv_image = QLineEdit(sv["image"])
+        self.sv_image.textChanged.connect(
+            lambda t: sv.__setitem__("image", t))
+        browse = QPushButton("...")
+        browse.setFixedWidth(32)
+        browse.clicked.connect(self._pick_saver_image)
+        img_row.addWidget(self.sv_image)
+        img_row.addWidget(browse)
+        sform.addRow("Image file", img_row)
+        left.addWidget(saver)
+
         layout.addLayout(left, 1)
 
         # ----- middle column: options for the selected page ----------------
@@ -212,6 +253,25 @@ class SettingsWindow(QMainWindow):
         self.timer.timeout.connect(self._update_preview)
         self.timer.start(1000)
         self._update_preview()
+
+    # ----- screen saver helpers ----------------------------------------------
+
+    def _reload_saver_pages(self):
+        self.sv_page.blockSignals(True)
+        self.sv_page.clear()
+        for p in self.cfg["pages"]:
+            self.sv_page.addItem(p.get("title") or p["type"])
+        idx = int(self.cfg["screensaver"].get("page_index", 0))
+        if 0 <= idx < self.sv_page.count():
+            self.sv_page.setCurrentIndex(idx)
+        self.sv_page.blockSignals(False)
+
+    def _pick_saver_image(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Screen saver image", "",
+            "Images (*.png *.jpg *.jpeg *.bmp *.webp)")
+        if path:
+            self.sv_image.setText(path)
 
     # ----- profiles tab ------------------------------------------------------
 
@@ -374,6 +434,8 @@ class SettingsWindow(QMainWindow):
                 f"{label}" + (f"  -  {title}" if title != label else ""))
             self.page_list.addItem(item)
         self.page_list.blockSignals(False)
+        if hasattr(self, "sv_page"):
+            self._reload_saver_pages()
         if self.cfg["pages"]:
             select = max(0, min(select, len(self.cfg["pages"]) - 1))
             self.page_list.setCurrentRow(select)
@@ -485,7 +547,8 @@ class SettingsWindow(QMainWindow):
                    "active": self.cfg["profiles"][0]["name"] if first
                    else "default",
                    "sel": 1 if first else 0,
-                   "bindings": (first or {}).get("bindings", {})}}
+                   "bindings": (first or {}).get("bindings", {}),
+                   "active_bindings": (first or {}).get("bindings", {})}}
         try:
             img = applets.RENDERERS[page["type"]](page, ctx)
         except Exception as err:

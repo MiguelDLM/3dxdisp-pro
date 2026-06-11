@@ -135,6 +135,21 @@ def main():
     dirty = True
     last_render = 0.0
     last_minute = None
+    last_bezel = time.time()
+    saver_on = False        # screensaver currently showing
+    saver_image = False     # saver is in image mode (vs page mode)
+    saver_prev = 0          # page to restore on wake
+
+    def last_activity():
+        spnav_last = spnav.state.last_event if spnav else 0.0
+        return max(last_bezel, spnav_last)
+
+    def saver_wake():
+        nonlocal saver_on, saver_image, page, dirty
+        if saver_on:
+            saver_on = saver_image = False
+            page = min(saver_prev, len(pages()) - 1)
+            dirty = True
 
     def pages():
         return cfg["pages"] or [lcdconfig.applet_with_defaults(
@@ -163,7 +178,12 @@ def main():
 
     def handle_key(bit):
         nonlocal page, brightness, light_on, menu_open, menu_sel
-        nonlocal help_until, dirty, profile_sel, active_profile
+        nonlocal help_until, dirty, profile_sel, active_profile, last_bezel
+        last_bezel = time.time()
+        if saver_on:
+            # First key press only wakes the screen saver.
+            saver_wake()
+            return
         titles = [p["title"] or p["type"] for p in pages()]
         # Contextual keys on the Profiles page: Up/Down select, OK activate.
         on_profiles = (pages()[page]["type"] == "profiles"
@@ -261,6 +281,25 @@ def main():
                 last_minute = minute
                 dirty = True
 
+            # Screen saver: trigger after idle, wake on any activity.
+            sv = cfg.get("screensaver", {})
+            if saver_on and spnav and \
+                    spnav.state.last_event > last_bezel and \
+                    now - spnav.state.last_event < 2:
+                saver_wake()
+            elif (not saver_on and sv.get("enabled")
+                  and sv.get("behavior") in ("page", "image")
+                  and now - last_activity() > float(sv["minutes"]) * 60):
+                saver_prev = page
+                saver_on = True
+                if sv["behavior"] == "page":
+                    page = max(0, min(int(sv["page_index"]),
+                                      len(pages()) - 1))
+                else:
+                    saver_image = True
+                menu_open = False
+                dirty = True
+
             current = pages()[page]
             if now - last_render >= applets.refresh_interval(current):
                 dirty = True
@@ -287,6 +326,7 @@ def main():
                 names = valid_profiles()
                 sel = min(profile_sel, len(names) - 1)
                 sel_profile = lcdconfig.get_profile(cfg, names[sel])
+                act_profile = lcdconfig.get_profile(cfg, active_profile)
                 ctx = {"stats": stats,
                        "spnav": spnav.state if spnav else None,
                        "profiles_ui": {
@@ -294,8 +334,13 @@ def main():
                            "active": active_profile,
                            "sel": sel,
                            "bindings": (sel_profile or {}).get("bindings",
-                                                               {})}}
-                img = applets.RENDERERS[current["type"]](current, ctx)
+                                                               {}),
+                           "active_bindings": (act_profile or {}).get(
+                               "bindings", {})}}
+                if saver_image:
+                    img = applets.render_saver_image(sv.get("image", ""))
+                else:
+                    img = applets.RENDERERS[current["type"]](current, ctx)
                 if menu_open:
                     titles = [p["title"] or p["type"] for p in pages()]
                     img = applets.draw_menu(img, titles, menu_sel)

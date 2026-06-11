@@ -63,12 +63,23 @@ APPLET_DEFAULTS = {
     "profiles": {
         "title": "Profiles",
     },
+    "active_profile": {
+        "title": "Active profile",
+    },
 }
 
 DEFAULT_CONFIG = {
     "brightness": 90,
     "osd_seconds": 1.8,
     "notifications": {"enabled": True, "seconds": 6},
+    # Screen saver: after `minutes` without using the device (bezel keys,
+    # SpaceMouse buttons or motion), apply `behavior`:
+    #   "keep"  - stay on the current page (no change)
+    #   "page"  - switch to the page at `page_index` (e.g. a clock)
+    #   "image" - show the picture at `image` full-screen
+    # Any interaction restores the previous page.
+    "screensaver": {"enabled": False, "minutes": 10, "behavior": "page",
+                    "page_index": 0, "image": ""},
     "pages": [
         {"type": "mappings"},
         {"type": "clock"},

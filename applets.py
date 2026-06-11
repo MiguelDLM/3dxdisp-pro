@@ -404,6 +404,96 @@ def render_profiles(cfg, ui):
     return img
 
 
+def render_active_profile(cfg, ui):
+    """Shows the active profile with the function-key pad drawn like the
+    physical layout: keys 1-4 at the corners of a square, key 5 in the
+    middle (buttons 12-16). Extra bindings are listed below."""
+    img, d = page_base(cfg["title"] or "Active profile")
+    name = ui["active"]
+    bindings = ui["active_bindings"]
+    d.text((WIDTH // 2, 44), name, fill=(0, 255, 120), anchor="mm",
+           font=font(19))
+
+    if not bindings:
+        d.text((WIDTH // 2, 130), "No key injection",
+               fill=(180, 180, 180), anchor="mm", font=font(16))
+        d.text((WIDTH // 2, 154), "(native SpaceMouse behavior)",
+               fill=(120, 120, 140), anchor="mm", font=font(12))
+        return img
+
+    # Function keys 1-5 = spacenavd buttons 12-16, drawn as the physical
+    # pad: 1 top-left, 2 top-right, 3 bottom-left, 4 bottom-right,
+    # 5 center.
+    boxes = {
+        12: (14, 64, 118, 100),     # 1: top-left
+        13: (202, 64, 306, 100),    # 2: top-right
+        16: (108, 105, 212, 141),   # 5: center
+        14: (14, 146, 118, 182),    # 3: bottom-left
+        15: (202, 146, 306, 182),   # 4: bottom-right
+    }
+    small, tiny = font(13), font(10)
+    for button, (x0, y0, x1, y1) in boxes.items():
+        b = bindings.get(str(button))
+        active = b and (b.get("label") or b.get("keys"))
+        d.rounded_rectangle([x0, y0, x1, y1], radius=6,
+                            fill=(45, 45, 90) if active else (25, 25, 45),
+                            outline=(120, 120, 200) if active
+                            else (60, 60, 90), width=2)
+        cx = (x0 + x1) // 2
+        num = BUTTON_NAMES.get(button, str(button))
+        d.text((x0 + 10, y0 + 9), num, fill=(0, 255, 0) if active
+               else (100, 100, 120), font=small)
+        if active:
+            label = b.get("label") or b.get("keys", "")
+            d.text((cx + 8, y0 + 9), label[:11], fill=(255, 255, 255),
+                   anchor="ma", font=tiny)
+            d.text((cx + 8, y0 + 21), b.get("keys", "")[:12],
+                   fill=(140, 140, 200), anchor="ma", font=tiny)
+    # Bindings outside the pad (buttons other than 12-16).
+    extras = [(int(k), v) for k, v in bindings.items()
+              if int(k) not in boxes and (v.get("label") or v.get("keys"))]
+    if extras:
+        extras.sort()
+        parts = [f"[{BUTTON_NAMES.get(b, b)}] {v.get('label') or v['keys']}"
+                 for b, v in extras[:4]]
+        d.text((8, HEIGHT - 28), "  ".join(parts)[:52],
+               fill=(160, 160, 160), font=tiny)
+        if len(extras) > 4:
+            d.text((WIDTH - 8, HEIGHT - 28), f"+{len(extras) - 4}",
+                   fill=(120, 120, 140), anchor="ra", font=tiny)
+    d.text((8, HEIGHT - 13), "Switch on the Profiles page",
+           fill=(100, 100, 140), anchor="lm", font=tiny)
+    return img
+
+
+_saver_cache = {}
+
+
+def render_saver_image(path):
+    """Full-screen image for the screen saver, letterboxed on black."""
+    try:
+        key = (path, os.path.getmtime(path))
+    except OSError:
+        key = (path, None)
+    if key not in _saver_cache:
+        _saver_cache.clear()
+        canvas = Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0))
+        try:
+            src = Image.open(path).convert("RGB")
+            scale = min(WIDTH / src.width, HEIGHT / src.height)
+            size = (max(1, int(src.width * scale)),
+                    max(1, int(src.height * scale)))
+            src = src.resize(size)
+            canvas.paste(src, ((WIDTH - size[0]) // 2,
+                               (HEIGHT - size[1]) // 2))
+        except Exception:
+            d = ImageDraw.Draw(canvas)
+            d.text((WIDTH // 2, HEIGHT // 2), "screensaver image not found",
+                   fill=(120, 120, 120), anchor="mm", font=font(13))
+        _saver_cache[key] = canvas
+    return _saver_cache[key]
+
+
 # --------------------------------------------------------------------------
 # Overlays (menu, help, OSD, notifications)
 # --------------------------------------------------------------------------
@@ -486,6 +576,8 @@ RENDERERS = {
     "system": lambda cfg, ctx: render_system(cfg, ctx["stats"]),
     "input": lambda cfg, ctx: render_input(cfg, ctx.get("spnav")),
     "profiles": lambda cfg, ctx: render_profiles(cfg, ctx["profiles_ui"]),
+    "active_profile": lambda cfg, ctx: render_active_profile(
+        cfg, ctx["profiles_ui"]),
 }
 
 

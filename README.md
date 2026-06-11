@@ -16,6 +16,54 @@ device) USB protocol and provides:
 ![device](https://img.shields.io/badge/device-046d%3Ac629-blue)
 ![license](https://img.shields.io/badge/license-GPL--3.0-green)
 
+## Relationship with FreeSpacenav (spacenavd, libspnav, spnavcfg)
+
+**spacenavd is required** — it is the driver that makes the 6DOF sensor and the
+31 buttons work at all; this project does not replace it, it completes it. The
+device exposes two independent USB interfaces, and each side of the stack owns
+one:
+
+```
+                      SpacePilot Pro (USB 046d:c629)
+                     ┌──────────────┬───────────────┐
+                     │ interface 1  │  interface 0  │
+                     │ HID: 6DOF +  │  LCD + bezel  │
+                     │ 31 buttons   │  keys         │
+                     └──────┬───────┴───────┬───────┘
+                            │               │
+                   ┌────────▼──────┐ ┌──────▼──────────────┐
+                   │   spacenavd   │ │  THIS PROJECT       │
+                   │  (FreeSpace-  │ │  spnav_lcd_daemon   │
+                   │   nav driver) │ │  (pyusb, direct)    │
+                   └────────┬──────┘ └──▲───────┬──────────┘
+                            │ socket    │       │ uinput virtual
+              /var/run/spnav.sock       │       │ keyboard (profiles)
+                  ┌─────────┼───────────┘       │
+                  │         │ button/motion     ▼
+          ┌───────▼──────┐  │ events     ┌──────────────┐
+          │ Blender, ... │◄─┘            │ any focused  │
+          │ (libspnav)   │               │ application  │
+          └──────────────┘               └──────────────┘
+```
+
+- **spacenavd** owns the HID interface: axes and buttons. Blender and other
+  NDOF-aware apps consume them through **libspnav** / the spacenavd socket.
+- **This project** owns the LCD interface (spacenavd ignores it): screen
+  drawing and the bezel keys around it. No conflict is possible — different
+  USB interfaces.
+- For the **6DOF input-test page and the button profiles**, our daemon
+  connects to spacenavd's socket *as one more client* (like Blender does), so
+  it sees the same button/motion events without stealing them from anyone.
+- **Button profiles vs spacenavd's `kbmap`**: spacenavd has a built-in
+  keyboard mapping (`kbmapN`), but it is X11-only, global, and single-profile.
+  Our profiles inject through a **uinput virtual keyboard** instead (works on
+  Wayland) and can be switched per context from the LCD. Both can coexist;
+  in practice you want spacenavd's config for motion tuning (`bnact`,
+  sensitivity, dead zones) and this project's profiles for shortcuts.
+- **spnavcfg** (the FreeSpacenav GUI) configures spacenavd itself (axes,
+  sensitivity, `bnactN`); our settings app configures the LCD and profiles.
+  They edit different files and don't interfere.
+
 ## How it works (the interesting part)
 
 The SpacePilot Pro was built while 3Dconnexion was a Logitech subsidiary, and its
@@ -122,6 +170,9 @@ spirit of 3DxWare's LCD applets on Windows. Available applets:
 - **Calendar**: month view with today highlighted.
 - **System monitor**: live CPU / RAM / GPU / VRAM / network usage bars with
   temperatures (AMD GPUs via amdgpu sysfs, NVIDIA via `nvidia-smi`).
+- **Active profile**: shows the current button profile with the function-key
+  pad drawn like the physical layout (keys 1-4 at the corners, 5 in the
+  middle) so you can see at a glance what each key does.
 - **6DOF input test**: live translation/rotation axis bars and a 31-button grid
   that lights up as you press — verify the device works at a glance (reads
   spacenavd's socket directly, alongside your other apps).
@@ -181,6 +232,10 @@ Fit, modifiers). The function keys 1-10 (buttons 12-21) are unbound by
 default, which makes them ideal for profile bindings without double-handling.
 
 ### Bezel keys
+
+**Screen saver**: optionally, after a configurable idle time (no bezel keys,
+buttons or motion) the screen can stay as-is, switch to a chosen page (e.g. the
+clock) or show a custom image; any interaction restores the previous page.
 
 Every bezel key press gives on-screen feedback (OSD):
 

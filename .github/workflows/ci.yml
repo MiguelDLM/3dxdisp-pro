@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-dejavu-core
+          pip install pyusb pillow evdev
+      - name: Render all applets offline
+        run: |
+          python - <<'EOF'
+          import time
+          import lcdconfig, applets
+          from keyinjector import validate_combo
+          from spnav_client import State
+          from sysstats import SystemStats
+
+          stats = SystemStats(); stats.cpu_percent(); time.sleep(0.2)
+          st = State(); st.connected = True
+          st.axes = [120, -80, 230, -160, 60, -30]; st.buttons = {1, 5}
+          ui = {"names": ["default", "Test"], "active": "Test", "sel": 1,
+                "bindings": {"12": {"label": "Undo", "keys": "ctrl+z"}},
+                "active_bindings": {"12": {"label": "Undo",
+                                           "keys": "ctrl+z"}}}
+          ctx = {"stats": stats, "spnav": st, "profiles_ui": ui}
+          for ptype in lcdconfig.APPLET_DEFAULTS:
+              cfg = lcdconfig.applet_with_defaults({"type": ptype})
+              img = applets.RENDERERS[ptype](cfg, ctx)
+              assert img.size == (320, 240), ptype
+              print(ptype, "OK")
+          for combo in ("tab", "g", "ctrl+shift+z", "kp_plus", "f12"):
+              assert validate_combo(combo) is None, combo
+          assert validate_combo("nosuchkey") is not None
+          print("key parser OK")
+          EOF
