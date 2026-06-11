@@ -165,10 +165,12 @@ def _time_text(now, cfg):
 
 
 def render_clock(cfg):
+    # Clean full-screen clock: no page header (it would repeat the time).
     if cfg["style"] == "analog":
         return render_analog_clock(cfg)
     dual = bool(cfg["second_timezone"])
-    img, d = page_base(cfg["title"] or "Clock", cfg["background"])
+    img = Image.new("RGB", (WIDTH, HEIGHT), cfg["background"])
+    d = ImageDraw.Draw(img)
     now = _now(cfg["timezone"])
     size = max(20, min(96, int(cfg["size"])))
     if dual:
@@ -177,19 +179,19 @@ def render_clock(cfg):
         rows = [(cfg["label"] or cfg["timezone"] or "Local", now),
                 (cfg["second_label"] or cfg["second_timezone"], now2)]
         for n, (label, t) in enumerate(rows):
-            y = 80 + n * 78
+            y = 62 + n * 96
             d.text((WIDTH // 2, y), _time_text(t, cfg), fill=cfg["color"],
                    anchor="mm", font=font(size, cfg["font"]))
-            d.text((WIDTH // 2, y + 36), label[:32], fill=(180, 180, 180),
+            d.text((WIDTH // 2, y + 40), label[:32], fill=(180, 180, 180),
                    anchor="mm", font=font(14, cfg["font"]))
     else:
-        d.text((WIDTH // 2, 112), _time_text(now, cfg), fill=cfg["color"],
+        d.text((WIDTH // 2, 100), _time_text(now, cfg), fill=cfg["color"],
                anchor="mm", font=font(size, cfg["font"]))
         if cfg["label"]:
-            d.text((WIDTH // 2, 60), cfg["label"][:32], fill=(180, 180, 180),
+            d.text((WIDTH // 2, 40), cfg["label"][:32], fill=(180, 180, 180),
                    anchor="mm", font=font(15, cfg["font"]))
         if cfg["show_date"]:
-            d.text((WIDTH // 2, 185), now.strftime("%A %d %B %Y"),
+            d.text((WIDTH // 2, 180), now.strftime("%A %d %B %Y"),
                    fill=(255, 255, 255), anchor="mm",
                    font=font(17, cfg["font"]))
     return img
@@ -407,12 +409,14 @@ def render_profiles(cfg, ui):
 def render_active_profile(cfg, ui):
     """Shows the active profile with the function-key pad drawn like the
     physical layout: keys 1-4 at the corners of a square, key 5 in the
-    middle (buttons 12-16). Extra bindings are listed below."""
+    middle. Each physical key has two functions (bank 1 = buttons 12-16,
+    bank 2 = buttons 17-21); the Menu button toggles the bank and the
+    active one is highlighted."""
     img, d = page_base(cfg["title"] or "Active profile")
     name = ui["active"]
     bindings = ui["active_bindings"]
-    d.text((WIDTH // 2, 44), name, fill=(0, 255, 120), anchor="mm",
-           font=font(19))
+    bank = ui.get("fn_bank", 1)
+    d.text((10, 44), name, fill=(0, 255, 120), anchor="lm", font=font(18))
 
     if not bindings:
         d.text((WIDTH // 2, 130), "No key injection",
@@ -421,47 +425,52 @@ def render_active_profile(cfg, ui):
                fill=(120, 120, 140), anchor="mm", font=font(12))
         return img
 
-    # Function keys 1-5 = spacenavd buttons 12-16, drawn as the physical
-    # pad: 1 top-left, 2 top-right, 3 bottom-left, 4 bottom-right,
-    # 5 center.
-    boxes = {
-        12: (14, 64, 118, 100),     # 1: top-left
-        13: (202, 64, 306, 100),    # 2: top-right
-        16: (108, 105, 212, 141),   # 5: center
-        14: (14, 146, 118, 182),    # 3: bottom-left
-        15: (202, 146, 306, 182),   # 4: bottom-right
-    }
-    small, tiny = font(13), font(10)
-    for button, (x0, y0, x1, y1) in boxes.items():
-        b = bindings.get(str(button))
-        active = b and (b.get("label") or b.get("keys"))
+    d.text((WIDTH - 8, 44), f"bank {'6-10' if bank == 2 else '1-5'}"
+           " (Menu)", fill=(255, 190, 0) if bank == 2 else (140, 140, 200),
+           anchor="rm", font=font(12))
+
+    # Physical pad: key 1 top-left, 2 top-right, 3 bottom-left,
+    # 4 bottom-right, 5 center. Buttons: bank1 = 12+i, bank2 = 17+i.
+    boxes = [
+        (0, 14, 58, 118, 102),      # key 1: top-left
+        (1, 202, 58, 306, 102),     # key 2: top-right
+        (4, 108, 104, 212, 148),    # key 5: center
+        (2, 14, 150, 118, 194),     # key 3: bottom-left
+        (3, 202, 150, 306, 194),    # key 4: bottom-right
+    ]
+    tiny = font(10)
+
+    def line(b):
+        if not b or not (b.get("label") or b.get("keys")):
+            return "-"
+        return (b.get("label") or b.get("keys", ""))[:12]
+
+    for i, x0, y0, x1, y1 in boxes:
+        b1 = bindings.get(str(12 + i))
+        b2 = bindings.get(str(17 + i))
+        used = (b1 or b2)
         d.rounded_rectangle([x0, y0, x1, y1], radius=6,
-                            fill=(45, 45, 90) if active else (25, 25, 45),
-                            outline=(120, 120, 200) if active
+                            fill=(45, 45, 90) if used else (25, 25, 45),
+                            outline=(120, 120, 200) if used
                             else (60, 60, 90), width=2)
-        cx = (x0 + x1) // 2
-        num = BUTTON_NAMES.get(button, str(button))
-        d.text((x0 + 10, y0 + 9), num, fill=(0, 255, 0) if active
-               else (100, 100, 120), font=small)
-        if active:
-            label = b.get("label") or b.get("keys", "")
-            d.text((cx + 8, y0 + 9), label[:11], fill=(255, 255, 255),
-                   anchor="ma", font=tiny)
-            d.text((cx + 8, y0 + 21), b.get("keys", "")[:12],
-                   fill=(140, 140, 200), anchor="ma", font=tiny)
-    # Bindings outside the pad (buttons other than 12-16).
+        d.text((x0 + 8, y0 + 6), str(i + 1), fill=(0, 255, 0) if used
+               else (100, 100, 120), font=font(13))
+        # Both functions, the active bank in white, the other dimmed.
+        c1 = (255, 255, 255) if bank == 1 else (110, 110, 140)
+        c2 = (255, 190, 0) if bank == 2 else (110, 110, 140)
+        d.text((x0 + 26, y0 + 6), line(b1), fill=c1, font=tiny)
+        d.text((x0 + 26, y0 + 24), line(b2), fill=c2, font=tiny)
+    # Bindings outside the pad (anything not 12-21).
     extras = [(int(k), v) for k, v in bindings.items()
-              if int(k) not in boxes and (v.get("label") or v.get("keys"))]
+              if not 12 <= int(k) <= 21 and (v.get("label") or
+                                             v.get("keys"))]
     if extras:
         extras.sort()
         parts = [f"[{BUTTON_NAMES.get(b, b)}] {v.get('label') or v['keys']}"
                  for b, v in extras[:4]]
         d.text((8, HEIGHT - 28), "  ".join(parts)[:52],
                fill=(160, 160, 160), font=tiny)
-        if len(extras) > 4:
-            d.text((WIDTH - 8, HEIGHT - 28), f"+{len(extras) - 4}",
-                   fill=(120, 120, 140), anchor="ra", font=tiny)
-    d.text((8, HEIGHT - 13), "Switch on the Profiles page",
+    d.text((8, HEIGHT - 13), "Menu: switch bank - Profiles page: switch",
            fill=(100, 100, 140), anchor="lm", font=tiny)
     return img
 

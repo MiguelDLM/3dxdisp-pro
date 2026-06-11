@@ -85,6 +85,10 @@ class SpnavClient:
         kind = values[0]
         if kind == UEV_MOTION:
             self.state.axes = list(values[1:7])
+            # Tiny deflections (resting hand, vibration) should not count
+            # as activity for things like the screen saver.
+            if not any(abs(v) > 30 for v in self.state.axes):
+                return
         elif kind == UEV_PRESS:
             self.state.buttons.add(values[1])
             if self.on_button:

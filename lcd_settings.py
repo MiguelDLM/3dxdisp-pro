@@ -304,20 +304,37 @@ class SettingsWindow(QMainWindow):
         right.addWidget(QLabel(
             "<b>Bindings</b> — keys syntax: <code>ctrl+shift+z</code>, "
             "<code>tab</code>, <code>g</code>, <code>f12</code>, "
-            "<code>kp_plus</code>... Empty row = button does nothing."))
+            "<code>kp_plus</code>... Empty row = button does nothing.<br>"
+            "The 5 physical function keys send buttons 12-16; rows 17-21 "
+            "(\"6\"-\"10\") are their <b>second function</b>, reached by "
+            "toggling the bank with the <b>Menu</b> button (reserved while "
+            "a profile is active)."))
         self.bindings = QTableWidget(31, 3)
         self.bindings.setHorizontalHeaderLabels(["Button", "Label", "Keys"])
         self.bindings.verticalHeader().setVisible(False)
-        self.bindings.setColumnWidth(0, 90)
-        self.bindings.setColumnWidth(1, 220)
-        self.bindings.setColumnWidth(2, 180)
+        self.bindings.setColumnWidth(0, 150)
+        self.bindings.setColumnWidth(1, 200)
+        self.bindings.setColumnWidth(2, 170)
         for b in range(31):
-            item = QTableWidgetItem(
-                f"{applets.BUTTON_NAMES.get(b, b)}  (#{b})")
+            name = applets.BUTTON_NAMES.get(b, str(b))
+            if b == 0:
+                name = "Menu (bank toggle)"
+            elif 12 <= b <= 16:
+                name = f"{name}  (function key)"
+            elif 17 <= b <= 21:
+                name = f"{name}  (= key {b - 16} +Menu)"
+            item = QTableWidgetItem(f"{name}  #{b}")
             item.setFlags(Qt.ItemIsEnabled)
             self.bindings.setItem(b, 0, item)
-            self.bindings.setItem(b, 1, QTableWidgetItem(""))
-            self.bindings.setItem(b, 2, QTableWidgetItem(""))
+            label_item = QTableWidgetItem("")
+            keys_item = QTableWidgetItem("")
+            if b == 0:
+                # Menu is consumed by the bank toggle while a profile is
+                # active, so bindings on it would never fire.
+                label_item.setFlags(Qt.ItemIsEnabled)
+                keys_item.setFlags(Qt.ItemIsEnabled)
+            self.bindings.setItem(b, 1, label_item)
+            self.bindings.setItem(b, 2, keys_item)
         self.bindings.cellChanged.connect(self._binding_changed)
         right.addWidget(self.bindings, 1)
         layout.addLayout(right, 1)

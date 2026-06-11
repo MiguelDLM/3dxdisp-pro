@@ -227,9 +227,19 @@ logind already grants the seated user an ACL (check with `getfacl
 `sudo cp 99-spacepilot-uinput.rules /etc/udev/rules.d/` (and make sure your
 user is in the `input` group).
 
+**Dual-function keys**: the SpacePilot Pro has 5 physical function keys but 10
+function-key button codes (12-21). Verified on real hardware (raw hidraw
+captures): **the device only ever emits codes 12-16** — one per physical key;
+the "second functions" (6-10) were implemented in software by 3DxWare. This
+project does the same: while a profile is active, the **Menu button toggles
+the function bank** — in bank 2 the physical keys 1-5 trigger the bindings of
+buttons 17-21. The Active-profile page shows both functions per key and
+highlights the live bank, and an OSD confirms each toggle. (While a profile is
+active, Menu is reserved for this; with `default` it stays native.)
+
 **Blender tip**: Blender consumes many SpaceMouse buttons natively (views,
-Fit, modifiers). The function keys 1-10 (buttons 12-21) are unbound by
-default, which makes them ideal for profile bindings without double-handling.
+Fit, modifiers). The function keys (buttons 12-21) are unbound by default,
+which makes them ideal for profile bindings without double-handling.
 
 ### Bezel keys
 

@@ -105,9 +105,16 @@ class SpacePilotLCD:
         return self.dev.write(LCD_ENDPOINT, payload, timeout=5000)
 
     def set_brightness(self, level):
-        """Set backlight brightness, 0-100 (vendor control transfer, per libg19)."""
+        """Set backlight brightness, 0-100.
+
+        Format from pylibg19's set_display_brightness: vendor control
+        transfer 0x0A with the level in a 9-byte data stage (libg19 has an
+        off-by-one bug here and effectively sends it in wValue, which this
+        panel ignores for intermediate values).
+        """
         level = max(0, min(100, int(level)))
-        self.dev.ctrl_transfer(0x41, 0x0A, level, 0, None, timeout=1000)
+        data = bytes([level, 0xE2, 0x12, 0x00, 0x8C, 0x11, 0x00, 0x10, 0x00])
+        self.dev.ctrl_transfer(0x41, 0x0A, 0, 0, data, timeout=1000)
 
     def close(self):
         try:

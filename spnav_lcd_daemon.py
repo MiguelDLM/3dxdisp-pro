@@ -84,6 +84,11 @@ def main():
     profile_sel = 0
     injector = None
     injector_error = None
+    # The 5 physical function keys emit a single code each (buttons 12-16);
+    # the hardware has no second-function codes (verified via hidraw). The
+    # Menu button toggles a software "bank": in bank 2, keys 1-5 trigger
+    # the bindings of buttons 17-21 ("6"-"10"), like 3DxWare does.
+    fn_bank = 1
 
     def valid_profiles():
         nonlocal active_profile
@@ -108,8 +113,16 @@ def main():
 
     def on_spacemouse_button(bnum, pressed):
         """Runs in the spnav client thread: inject the active binding."""
+        nonlocal fn_bank, dirty
         if not pressed or active_profile == lcdconfig.DEFAULT_PROFILE:
             return
+        if bnum == 0:                      # Menu: toggle function bank
+            fn_bank = 2 if fn_bank == 1 else 1
+            set_osd("Function keys 6-10" if fn_bank == 2
+                    else "Function keys 1-5")
+            return
+        if fn_bank == 2 and 12 <= bnum <= 16:
+            bnum += 5                      # keys 1-5 act as 6-10
         profile = lcdconfig.get_profile(cfg, active_profile)
         binding = (profile or {}).get("bindings", {}).get(str(bnum))
         if not binding or not binding.get("keys"):
@@ -150,6 +163,7 @@ def main():
             saver_on = saver_image = False
             page = min(saver_prev, len(pages()) - 1)
             dirty = True
+            print("screensaver off", file=sys.stderr)
 
     def pages():
         return cfg["pages"] or [lcdconfig.applet_with_defaults(
@@ -179,6 +193,7 @@ def main():
     def handle_key(bit):
         nonlocal page, brightness, light_on, menu_open, menu_sel
         nonlocal help_until, dirty, profile_sel, active_profile, last_bezel
+        nonlocal fn_bank
         last_bezel = time.time()
         if saver_on:
             # First key press only wakes the screen saver.
@@ -196,6 +211,7 @@ def main():
                 profile_sel = (profile_sel + 1) % len(names)
             else:
                 active_profile = names[profile_sel]
+                fn_bank = 1
                 lcdconfig.save_state({"active_profile": active_profile})
                 set_osd(f"Profile: {active_profile}")
             dirty = True
@@ -299,6 +315,8 @@ def main():
                     saver_image = True
                 menu_open = False
                 dirty = True
+                print(f"screensaver on after "
+                      f"{now - last_activity():.0f}s idle", file=sys.stderr)
 
             current = pages()[page]
             if now - last_render >= applets.refresh_interval(current):
@@ -336,7 +354,8 @@ def main():
                            "bindings": (sel_profile or {}).get("bindings",
                                                                {}),
                            "active_bindings": (act_profile or {}).get(
-                               "bindings", {})}}
+                               "bindings", {}),
+                           "fn_bank": fn_bank}}
                 if saver_image:
                     img = applets.render_saver_image(sv.get("image", ""))
                 else:
