@@ -29,10 +29,15 @@ class State:
 
 
 class SpnavClient:
-    """Background reader thread; read .state for the latest values."""
+    """Background reader thread; read .state for the latest values.
 
-    def __init__(self):
+    on_button, if given, is called as on_button(button_number, pressed)
+    from the reader thread on every button event.
+    """
+
+    def __init__(self, on_button=None):
         self.state = State()
+        self.on_button = on_button
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -82,6 +87,10 @@ class SpnavClient:
             self.state.axes = list(values[1:7])
         elif kind == UEV_PRESS:
             self.state.buttons.add(values[1])
+            if self.on_button:
+                self.on_button(values[1], True)
         elif kind == UEV_RELEASE:
             self.state.buttons.discard(values[1])
+            if self.on_button:
+                self.on_button(values[1], False)
         self.state.last_event = time.time()

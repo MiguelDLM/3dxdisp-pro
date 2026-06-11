@@ -1,0 +1,42 @@
+{
+  "_comment": "Example button profiles. Merge the 'profiles' array into ~/.config/spacepilot-lcd/config.json or recreate them in the settings app (Profiles tab). Button numbers follow spacenavd/GHOST: 12-21 are the function keys 1-10, see README.",
+  "profiles": [
+    {
+      "name": "Blender Edit",
+      "bindings": {
+        "12": {"label": "Toggle Edit mode", "keys": "tab"},
+        "13": {"label": "Move (grab)", "keys": "g"},
+        "14": {"label": "Rotate", "keys": "r"},
+        "15": {"label": "Scale", "keys": "s"},
+        "16": {"label": "Extrude", "keys": "e"},
+        "17": {"label": "Loop cut", "keys": "ctrl+r"},
+        "18": {"label": "Undo", "keys": "ctrl+z"},
+        "19": {"label": "Redo", "keys": "ctrl+shift+z"}
+      }
+    },
+    {
+      "name": "Blender Sculpt",
+      "bindings": {
+        "12": {"label": "Toggle Sculpt", "keys": "ctrl+tab"},
+        "13": {"label": "Brush size", "keys": "f"},
+        "14": {"label": "Brush strength", "keys": "shift+f"},
+        "15": {"label": "Invert (hold ctrl)", "keys": "ctrl"},
+        "16": {"label": "Smooth (shift)", "keys": "shift"},
+        "18": {"label": "Undo", "keys": "ctrl+z"},
+        "19": {"label": "Redo", "keys": "ctrl+shift+z"}
+      }
+    },
+    {
+      "name": "LibreOffice Calc",
+      "bindings": {
+        "12": {"label": "Undo", "keys": "ctrl+z"},
+        "13": {"label": "Redo", "keys": "ctrl+y"},
+        "14": {"label": "Next sheet", "keys": "ctrl+pagedown"},
+        "15": {"label": "Prev sheet", "keys": "ctrl+pageup"},
+        "16": {"label": "Save", "keys": "ctrl+s"},
+        "17": {"label": "Bold", "keys": "ctrl+b"},
+        "18": {"label": "Sum", "keys": "alt+equal"}
+      }
+    }
+  ]
+}

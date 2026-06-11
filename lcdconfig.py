@@ -16,6 +16,9 @@ CONFIG_DIR = os.path.join(
     os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
     "spacepilot-lcd")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+# Runtime state written by the daemon (e.g. the profile activated from the
+# bezel keys), kept apart so it never clashes with the settings app.
+STATE_FILE = os.path.join(CONFIG_DIR, "state.json")
 
 # Per-applet option defaults. The settings app builds its forms from these,
 # so adding a key here makes it configurable everywhere.
@@ -57,6 +60,9 @@ APPLET_DEFAULTS = {
         "title": "6DOF input test",
         "axis_range": 350,
     },
+    "profiles": {
+        "title": "Profiles",
+    },
 }
 
 DEFAULT_CONFIG = {
@@ -68,7 +74,43 @@ DEFAULT_CONFIG = {
         {"type": "clock"},
         {"type": "system"},
     ],
+    # Button profiles: when a profile other than "default" is active, its
+    # bindings inject keyboard shortcuts (virtual keyboard) on SpaceMouse
+    # button presses. "default" always exists and means: no injection.
+    # profiles: [{"name": ..., "bindings": {"12": {"label": ..., "keys":
+    # "ctrl+z"}, ...}}]
+    "profiles": [],
 }
+
+DEFAULT_PROFILE = "default"
+
+
+def profile_names(cfg):
+    """All selectable profile names; 'default' is always first."""
+    return [DEFAULT_PROFILE] + [p["name"] for p in cfg.get("profiles", [])]
+
+
+def get_profile(cfg, name):
+    for p in cfg.get("profiles", []):
+        if p["name"] == name:
+            return p
+    return None
+
+
+def load_state():
+    try:
+        with open(STATE_FILE) as fp:
+            return json.load(fp)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    tmp = STATE_FILE + ".tmp"
+    with open(tmp, "w") as fp:
+        json.dump(state, fp)
+    os.replace(tmp, STATE_FILE)
 
 
 def applet_with_defaults(page):

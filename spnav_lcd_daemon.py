@@ -48,6 +48,11 @@ from spnav_client import SpnavClient
 from spplcd import SpacePilotLCD
 from sysstats import SystemStats
 
+try:
+    from keyinjector import KeyInjector
+except ImportError:
+    KeyInjector = None
+
 KEY_ENDPOINT = 0x81
 KEY_SETTINGS, KEY_BACK, KEY_MENU, KEY_OK = 0x01, 0x02, 0x04, 0x08
 KEY_RIGHT, KEY_LEFT, KEY_DOWN, KEY_UP = 0x10, 0x20, 0x40, 0x80
@@ -73,6 +78,51 @@ def main():
     notif_listener = None
     notif = None            # (app, summary, body, expiry)
 
+    # --- button profiles ----------------------------------------------------
+    active_profile = lcdconfig.load_state().get(
+        "active_profile", lcdconfig.DEFAULT_PROFILE)
+    profile_sel = 0
+    injector = None
+    injector_error = None
+
+    def valid_profiles():
+        nonlocal active_profile
+        names = lcdconfig.profile_names(cfg)
+        if active_profile not in names:
+            active_profile = lcdconfig.DEFAULT_PROFILE
+        return names
+
+    def get_injector():
+        nonlocal injector, injector_error
+        if injector is None and injector_error is None:
+            if KeyInjector is None:
+                injector_error = "python-evdev not installed"
+            else:
+                try:
+                    injector = KeyInjector()
+                except Exception as err:
+                    injector_error = str(err)
+                    print(f"Key injection unavailable: {err}",
+                          file=sys.stderr)
+        return injector
+
+    def on_spacemouse_button(bnum, pressed):
+        """Runs in the spnav client thread: inject the active binding."""
+        if not pressed or active_profile == lcdconfig.DEFAULT_PROFILE:
+            return
+        profile = lcdconfig.get_profile(cfg, active_profile)
+        binding = (profile or {}).get("bindings", {}).get(str(bnum))
+        if not binding or not binding.get("keys"):
+            return
+        inj = get_injector()
+        if inj is None:
+            return
+        try:
+            inj.press_combo(binding["keys"])
+        except Exception as err:
+            print(f"Injection failed for button {bnum}: {err}",
+                  file=sys.stderr)
+
     lcd = None
     page = 0
     brightness = int(cfg["brightness"])
@@ -91,14 +141,16 @@ def main():
             {"type": "clock"})]
 
     def need_spnav():
-        return any(p["type"] == "input" for p in pages())
+        return (any(p["type"] == "input" for p in pages())
+                or bool(cfg.get("profiles")))
 
     def apply_config():
         nonlocal spnav, notif_listener, page, dirty, brightness
         if need_spnav() and spnav is None:
-            spnav = SpnavClient()
+            spnav = SpnavClient(on_button=on_spacemouse_button)
         if cfg["notifications"]["enabled"] and notif_listener is None:
             notif_listener = NotificationListener()
+        valid_profiles()
         page = min(page, len(pages()) - 1)
         dirty = True
 
@@ -111,8 +163,23 @@ def main():
 
     def handle_key(bit):
         nonlocal page, brightness, light_on, menu_open, menu_sel
-        nonlocal help_until, dirty
+        nonlocal help_until, dirty, profile_sel, active_profile
         titles = [p["title"] or p["type"] for p in pages()]
+        # Contextual keys on the Profiles page: Up/Down select, OK activate.
+        on_profiles = (pages()[page]["type"] == "profiles"
+                       and not menu_open and not help_until)
+        if on_profiles and bit in (KEY_UP, KEY_DOWN, KEY_OK):
+            names = valid_profiles()
+            if bit == KEY_UP:
+                profile_sel = (profile_sel - 1) % len(names)
+            elif bit == KEY_DOWN:
+                profile_sel = (profile_sel + 1) % len(names)
+            else:
+                active_profile = names[profile_sel]
+                lcdconfig.save_state({"active_profile": active_profile})
+                set_osd(f"Profile: {active_profile}")
+            dirty = True
+            return
         if bit == KEY_LIGHT:
             light_on = not light_on
             lcd.set_brightness(brightness if light_on else 0)
@@ -217,8 +284,17 @@ def main():
                 dirty = True
 
             if dirty:
+                names = valid_profiles()
+                sel = min(profile_sel, len(names) - 1)
+                sel_profile = lcdconfig.get_profile(cfg, names[sel])
                 ctx = {"stats": stats,
-                       "spnav": spnav.state if spnav else None}
+                       "spnav": spnav.state if spnav else None,
+                       "profiles_ui": {
+                           "names": names,
+                           "active": active_profile,
+                           "sel": sel,
+                           "bindings": (sel_profile or {}).get("bindings",
+                                                               {})}}
                 img = applets.RENDERERS[current["type"]](current, ctx)
                 if menu_open:
                     titles = [p["title"] or p["type"] for p in pages()]

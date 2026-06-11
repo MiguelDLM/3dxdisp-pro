@@ -146,6 +146,40 @@ A desktop launcher template is included (`spacepilot-lcd-settings.desktop`): edi
 the path inside and copy it to `~/.local/share/applications/`. To ship the app as
 a single binary, PyInstaller works: `pyinstaller --onefile lcd_settings.py`.
 
+### Button profiles (SpaceMouse Enterprise style)
+
+Profiles map SpaceMouse buttons to keyboard shortcuts per use context — e.g. a
+"Blender Edit" profile where function key 1 sends `Tab`, 2 sends `G` (move),
+3 sends `R` (rotate); or a "LibreOffice Calc" profile with undo/redo/sheet
+navigation. Injection happens through a **uinput virtual keyboard**
+(python-evdev), so it works on Wayland and X11 alike.
+
+- The **`default` profile always exists** and means *no injection at all* —
+  the device behaves natively (spacenavd/Blender NDOF untouched). You can
+  return to it at any time.
+- **Switching**: add the **Profiles page** to the LCD; on that page the bezel
+  Up/Down keys move through the profile list and **OK activates** (the page
+  shows each profile's button table, Enterprise style; the active one is
+  marked ●). The chosen profile persists across daemon restarts.
+- **Editing**: the settings app has a **Profiles tab** — create, duplicate
+  (e.g. "Blender Sculpt" from "Blender Edit"), rename, delete, and fill a
+  31-row table of label + keys per button. Invalid combos are flagged red.
+- **Keys syntax**: `ctrl+shift+z`, `tab`, `g`, `f12`, `ctrl+pagedown`,
+  `kp_plus`... Letters, digits, F-keys, navigation and modifiers are
+  layout-independent; for arithmetic symbols prefer the `kp_*` numpad names.
+- Example profiles in [`examples/profiles.json`](examples/profiles.json)
+  (Blender Edit / Blender Sculpt / LibreOffice Calc).
+
+**Permissions**: writing to `/dev/uinput` is required. On many modern systems
+logind already grants the seated user an ACL (check with `getfacl
+/dev/uinput`); otherwise install the included rule:
+`sudo cp 99-spacepilot-uinput.rules /etc/udev/rules.d/` (and make sure your
+user is in the `input` group).
+
+**Blender tip**: Blender consumes many SpaceMouse buttons natively (views,
+Fit, modifiers). The function keys 1-10 (buttons 12-21) are unbound by
+default, which makes them ideal for profile bindings without double-handling.
+
 ### Bezel keys
 
 Every bezel key press gives on-screen feedback (OSD):
@@ -153,7 +187,7 @@ Every bezel key press gives on-screen feedback (OSD):
 | Key | Function |
 |---|---|
 | Left / Right | previous / next page |
-| Up / Down | backlight brightness (on-screen bar) |
+| Up / Down | backlight brightness (on the Profiles page: select profile) |
 | Light | backlight on / off |
 | Menu | page menu — Up/Down to select, OK to confirm, Back to cancel |
 | OK | confirm in menu; refresh page otherwise |

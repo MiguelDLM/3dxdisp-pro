@@ -360,6 +360,51 @@ def render_input(cfg, state):
 
 
 # --------------------------------------------------------------------------
+# Button profiles
+# --------------------------------------------------------------------------
+
+def render_profiles(cfg, ui):
+    """ui: {"names": [...], "active": name, "sel": index, "bindings":
+    {button: {label, keys}} of the selected profile}."""
+    img, d = page_base(cfg["title"] or "Profiles")
+    small, entry = font(12), font(14)
+    names = ui["names"]
+    sel = ui["sel"]
+    # Left column: selectable profile list.
+    for n, name in enumerate(names[:8]):
+        y = 40 + n * 22
+        if n == sel:
+            d.rectangle([4, y - 2, 118, y + 16], fill=(60, 60, 140))
+        marker = "● " if name == ui["active"] else "  "
+        d.text((8, y), (marker + name)[:14], fill=(0, 255, 120)
+               if name == ui["active"] else (255, 255, 255), font=entry)
+    d.line([124, 36, 124, HEIGHT - 28], fill=(90, 90, 120))
+    # Right column: bindings of the selected profile.
+    bindings = ui["bindings"]
+    if not bindings:
+        d.text((222, 110), "default:", fill=(160, 160, 160), anchor="mm",
+               font=entry)
+        d.text((222, 132), "no key injection", fill=(160, 160, 160),
+               anchor="mm", font=small)
+    else:
+        items = sorted(bindings.items(), key=lambda kv: int(kv[0]))
+        for n, (button, b) in enumerate(items[:8]):
+            y = 40 + n * 22
+            name = BUTTON_NAMES.get(int(button), f"B{button}")
+            d.text((132, y), f"[{name}]", fill=(0, 255, 0), font=small)
+            label = b.get("label") or b.get("keys", "")
+            d.text((176, y), label[:13], fill=(255, 255, 255), font=small)
+            d.text((WIDTH - 6, y), b.get("keys", "")[:10],
+                   fill=(140, 140, 200), anchor="ra", font=small)
+        if len(items) > 8:
+            d.text((WIDTH - 8, HEIGHT - 28), f"+{len(items) - 8} more",
+                   fill=(160, 160, 160), anchor="rm", font=small)
+    d.text((8, HEIGHT - 14), "Up/Down select - OK activate",
+           fill=(100, 100, 140), anchor="lm", font=small)
+    return img
+
+
+# --------------------------------------------------------------------------
 # Overlays (menu, help, OSD, notifications)
 # --------------------------------------------------------------------------
 
@@ -440,6 +485,7 @@ RENDERERS = {
     "calendar": lambda cfg, ctx: render_calendar(cfg),
     "system": lambda cfg, ctx: render_system(cfg, ctx["stats"]),
     "input": lambda cfg, ctx: render_input(cfg, ctx.get("spnav")),
+    "profiles": lambda cfg, ctx: render_profiles(cfg, ctx["profiles_ui"]),
 }
 
 
