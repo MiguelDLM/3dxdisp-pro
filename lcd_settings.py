@@ -117,7 +117,7 @@ def demo_spnav_state():
 class SettingsWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SpacePilot Pro LCD Settings")
+        self.setWindowTitle(f"3dxdisp-pro Settings  v{lcdconfig.VERSION}")
         self.cfg = lcdconfig.load()
         self.stats = SystemStats()
         self.stats.cpu_percent()  # prime the delta
@@ -128,6 +128,7 @@ class SettingsWindow(QMainWindow):
         root = QWidget()
         tabs.addTab(root, "Pages")
         tabs.addTab(self._build_profiles_tab(), "Profiles")
+        tabs.addTab(self._build_about_tab(), "About")
         layout = QHBoxLayout(root)
 
         # ----- left column: page list + ordering ---------------------------
@@ -274,6 +275,91 @@ class SettingsWindow(QMainWindow):
             self.sv_image.setText(path)
 
     # ----- profiles tab ------------------------------------------------------
+
+    # ----- about tab ---------------------------------------------------------
+
+    def _build_about_tab(self):
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        layout.addStretch(1)
+        title = QLabel("<h1>3dxdisp-pro</h1>")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+        info = QLabel(
+            f"<p align='center'>Version <b>v{lcdconfig.VERSION}</b></p>"
+            "<p align='center'>LCD, bezel keys and button profiles for the "
+            "3Dconnexion SpacePilot Pro on Linux.</p>"
+            f"<p align='center'><a href='https://github.com/MiguelDLM'>"
+            "github.com/MiguelDLM</a> &nbsp;·&nbsp; "
+            f"<a href='{lcdconfig.REPO_URL}'>project repository</a></p>"
+            "<p align='center'>License: GPL-3.0</p>")
+        info.setOpenExternalLinks(True)
+        layout.addWidget(info)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        lic_btn = QPushButton("View license")
+        lic_btn.clicked.connect(self._show_license)
+        row.addWidget(lic_btn)
+        upd_btn = QPushButton("Check for updates")
+        upd_btn.clicked.connect(self._check_updates)
+        row.addWidget(upd_btn)
+        row.addStretch(1)
+        layout.addLayout(row)
+        layout.addStretch(2)
+        return host
+
+    def _show_license(self):
+        import os
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "LICENSE")
+        try:
+            with open(path) as fp:
+                text = fp.read()
+        except OSError:
+            text = ("LICENSE file not found. This program is distributed "
+                    "under the GNU GPL v3: https://www.gnu.org/licenses/"
+                    "gpl-3.0.html")
+        from PySide6.QtWidgets import QDialog, QPlainTextEdit
+        dlg = QDialog(self)
+        dlg.setWindowTitle("GNU General Public License v3")
+        dlg.resize(620, 480)
+        box = QVBoxLayout(dlg)
+        view = QPlainTextEdit(text)
+        view.setReadOnly(True)
+        box.addWidget(view)
+        close = QPushButton("Close")
+        close.clicked.connect(dlg.accept)
+        box.addWidget(close)
+        dlg.exec()
+
+    def _check_updates(self):
+        import json
+        from urllib.request import urlopen, Request
+        api = (lcdconfig.REPO_URL.replace("github.com",
+                                          "api.github.com/repos")
+               + "/releases/latest")
+        try:
+            req = Request(api, headers={"Accept":
+                                        "application/vnd.github+json"})
+            with urlopen(req, timeout=6) as resp:
+                latest = json.load(resp).get("tag_name", "")
+        except Exception as err:
+            QMessageBox.warning(self, "Check for updates",
+                                f"Could not reach GitHub:\n{err}")
+            return
+        current = f"v{lcdconfig.VERSION}"
+        if not latest:
+            QMessageBox.information(self, "Check for updates",
+                                    "No releases published yet.")
+        elif latest == current:
+            QMessageBox.information(
+                self, "Check for updates",
+                f"You are up to date ({current}).")
+        else:
+            QMessageBox.information(
+                self, "Check for updates",
+                f"New version available: {latest} (you have {current}).\n"
+                f"Download it at:\n{lcdconfig.REPO_URL}/releases/latest")
 
     def _build_profiles_tab(self):
         host = QWidget()

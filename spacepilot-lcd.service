@@ -11,8 +11,8 @@ Description=3Dconnexion SpacePilot Pro LCD status daemon
 
 [Service]
 Type=simple
-WorkingDirectory=%h/3Dconnexoion-Spacemous-Linux
-ExecStart=%h/3Dconnexoion-Spacemous-Linux/venv/bin/python spnav_lcd_daemon.py
+WorkingDirectory=%h/3dxdisp-pro
+ExecStart=%h/3dxdisp-pro/venv/bin/python spnav_lcd_daemon.py
 Restart=on-failure
 RestartSec=10
 

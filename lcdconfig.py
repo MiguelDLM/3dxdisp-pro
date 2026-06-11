@@ -12,6 +12,9 @@ import glob
 import json
 import os
 
+VERSION = "1.0"
+REPO_URL = "https://github.com/MiguelDLM/3dxdisp-pro"
+
 CONFIG_DIR = os.path.join(
     os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
     "spacepilot-lcd")

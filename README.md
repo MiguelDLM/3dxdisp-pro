@@ -1,4 +1,9 @@
-# 3Dconnexion SpacePilot Pro LCD on Linux
+# 3dxdisp-pro — 3Dconnexion SpacePilot Pro LCD on Linux
+
+![CI](https://github.com/MiguelDLM/3dxdisp-pro/actions/workflows/ci.yml/badge.svg)
+![release](https://img.shields.io/github/v/release/MiguelDLM/3dxdisp-pro?include_prereleases)
+![device](https://img.shields.io/badge/device-046d%3Ac629-blue)
+![license](https://img.shields.io/badge/license-GPL--3.0-green)
 
 Bring the LCD screen of the **3Dconnexion SpacePilot Pro** back to life on Linux.
 
@@ -12,9 +17,6 @@ device) USB protocol and provides:
   assignments and a clock on the screen, similar to what 3DxWare does on Windows
 - **`99-spacepilot-pro-lcd.rules`** — udev rule for non-root access
 - **`spacepilot-lcd.service`** — systemd user unit for the daemon
-
-![device](https://img.shields.io/badge/device-046d%3Ac629-blue)
-![license](https://img.shields.io/badge/license-GPL--3.0-green)
 
 ## Relationship with FreeSpacenav (spacenavd, libspnav, spnavcfg)
 
@@ -135,8 +137,8 @@ orientation was discovered.
 ## Installation
 
 ```bash
-git clone https://github.com/MiguelDLM/3Dconnexoion-Spacemous-Linux.git
-cd 3Dconnexoion-Spacemous-Linux
+git clone https://github.com/MiguelDLM/3dxdisp-pro.git
+cd 3dxdisp-pro
 
 # Dependencies (in a venv, or use your distro's python3-usb / python3-pil)
 python3 -m venv venv

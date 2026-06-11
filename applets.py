@@ -344,20 +344,22 @@ def render_input(cfg, state):
                         fill=(0, 200, 255) if n < 3 else (255, 160, 0))
         d.text((WIDTH - 8, y + 7), str(value), fill=(200, 200, 200),
                anchor="rm", font=small)
-    # Button grid: 31 cells, lit while pressed.
+    # Button grid: physical buttons only (codes 17-21, the "6"-"10" second
+    # functions, never fire in hardware — verified via hidraw).
     top = 180
     d.text((10, top - 4), "Buttons:", fill=(160, 160, 160), font=small)
-    for b in range(31):
-        col, row = b % 16, b // 16
-        x = 10 + col * 19
+    physical = [b for b in range(31) if not 17 <= b <= 21]
+    for n, b in enumerate(physical):
+        col, row = n % 13, n // 13
+        x = 10 + col * 23
         y = top + 12 + row * 22
         lit = b in state.buttons
-        d.rectangle([x, y, x + 16, y + 18],
+        d.rectangle([x, y, x + 20, y + 18],
                     fill=(0, 220, 100) if lit else (35, 35, 60),
                     outline=(90, 90, 120))
-        name = BUTTON_NAMES.get(b, str(b))[:2]
-        d.text((x + 8, y + 9), name, fill=(0, 0, 0) if lit else (150, 150, 170),
-               anchor="mm", font=font(9))
+        name = BUTTON_NAMES.get(b, str(b))[:3]
+        d.text((x + 10, y + 9), name, fill=(0, 0, 0) if lit
+               else (150, 150, 170), anchor="mm", font=font(9))
     return img
 
 
