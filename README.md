@@ -436,6 +436,28 @@ The LCD daemon picks the file up automatically and shows the bindings on the
 screen. The commented `kbmap` examples in the same file inject keyboard keys,
 but only on X11 sessions — they do nothing on Wayland.
 
+## Using it with 3D Slicer
+
+3D Slicer has no 3D-mouse support on Linux. [`slicer/SpaceMouseNav`](slicer/SpaceMouseNav)
+is a scripted Slicer module that reads spacenavd's socket and drives the view
+under the mouse cursor:
+
+| View | Motion |
+|---|---|
+| Slice views | slide = pan, push/pull = zoom, twist = scroll through slices |
+| 3D views | slide = pan, push/pull = zoom, tilt/twist/roll = orbit |
+
+View keys: **Fit** resets the view, **Top / Front / Right** set Axial /
+Coronal / Sagittal (or the camera direction in 3D), **Roll** steps one slice,
+**ISO1** maximizes/restores the view, **ISO2** locks navigation to one view.
+
+```bash
+slicer/install-slicer-module.sh            # or pass the path to Slicer
+```
+
+Restart Slicer; it runs from startup. Axes, inversion, speed, dead zone and
+response curve are in *Modules > Utilities > SpaceMouse Navigation*.
+
 ## Compatibility notes
 
 - Tested on Linux with spacenavd 1.3.1 running — the daemon and spacenavd coexist
